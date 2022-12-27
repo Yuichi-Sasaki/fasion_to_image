@@ -455,7 +455,7 @@ def main():
     else:
         data_files = {}
         if args.train_data_dir is not None:
-            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)
+            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:100]
             imgs_hiraoki = [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui]
             #print(len(imgs_chakui))
             dataset = Dataset.from_dict({"pixel_values":imgs_chakui, "ref_pixel_values":imgs_hiraoki}, split="train")
@@ -527,11 +527,9 @@ def main():
     # CLIPの実装を参照 (https://huggingface.co/openai/clip-vit-large-patch14/blob/main/preprocessor_config.json)
     train_transforms_ref = transforms.Compose(
         [
-            transforms.CenterCrop(224) if args.center_crop else transforms.RandomCrop(args.resolution),
-            transforms.Resize((224,224), interpolation=transforms.InterpolationMode.BILINEAR),
-            #transforms.RandomHorizontalFlip() if args.random_flip else transforms.Lambda(lambda x: x),
+            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
+            transforms.Resize((args.resolution,args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.ToTensor(),
-            #transforms.Normalize([0.5], [0.5]),
             transforms.Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
         ]
     )
@@ -660,6 +658,15 @@ def main():
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
+    pipeline = StableDiffusionPipelineVision.from_pretrained(
+        args.pretrained_model_name_or_path,
+        vision_encoder=vision_encoder,
+        converter=converter,
+        vae=vae,
+        unet=unet,
+        revision=args.revision,
+    )
+
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         converter.train()
@@ -689,8 +696,6 @@ def main():
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 # Get the text embedding for conditioning
-                #encoder_hidden_states = text_encoder(batch["input_ids"])[0]
-                #encoder_hidden_states_vision = vision_encoder(transforms.functional.resize(img=batch["ref_pixel_values"], size=(224,224)))
                 encoder_hidden_states_vision = vision_encoder(batch["ref_pixel_values"])
                 encoder_hidden_states = encoder_hidden_states_vision["last_hidden_state"]
                 encoder_hidden_states = converter(encoder_hidden_states)
@@ -747,14 +752,14 @@ def main():
             if args.use_ema:
                 ema_unet.copy_to(unet.parameters())
 
-            pipeline = StableDiffusionPipelineVision.from_pretrained(
-                args.pretrained_model_name_or_path,
-                vision_encoder=vision_encoder,
-                converter=converter,
-                vae=vae,
-                unet=unet,
-                revision=args.revision,
-            )
+            #pipeline = StableDiffusionPipelineVision.from_pretrained(
+            #    args.pretrained_model_name_or_path,
+            #    vision_encoder=vision_encoder,
+            #    converter=converter,
+            #    vae=vae,
+            #    unet=unet,
+            #    revision=args.revision,
+            #)
             print("files saved.")
             pipeline.save_pretrained(args.output_dir)
             #vae.save_pretrained(args.output_dir+"/vae")
