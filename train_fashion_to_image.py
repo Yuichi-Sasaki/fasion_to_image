@@ -18,6 +18,7 @@ from accelerate.logging import get_logger
 from accelerate.utils import set_seed
 from datasets import load_dataset, Dataset, Image
 from diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
+from pipeline_stable_diffusion_vision import StableDiffusionPipelineVision
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version
 from diffusers.utils.import_utils import is_xformers_available
@@ -746,19 +747,20 @@ def main():
             if args.use_ema:
                 ema_unet.copy_to(unet.parameters())
 
-            pipeline = StableDiffusionPipeline.from_pretrained(
+            pipeline = StableDiffusionPipelineVision.from_pretrained(
                 args.pretrained_model_name_or_path,
-                text_encoder=text_encoder,
+                vision_encoder=vision_encoder,
+                converter=converter,
                 vae=vae,
                 unet=unet,
                 revision=args.revision,
             )
             print("files saved.")
             pipeline.save_pretrained(args.output_dir)
-            vae.save_pretrained(args.output_dir+"/vae")
-            unet.save_pretrained(args.output_dir+"/unet")
-            converter.save_pretrained(args.output_dir+"/converter")
-            vision_encoder.save_pretrained(args.output_dir+"/vision_encoder")
+            #vae.save_pretrained(args.output_dir+"/vae")
+            #unet.save_pretrained(args.output_dir+"/unet")
+            #converter.save_pretrained(args.output_dir+"/converter")
+            #vision_encoder.save_pretrained(args.output_dir+"/vision_encoder")
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
