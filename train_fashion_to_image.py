@@ -187,6 +187,10 @@ def parse_args():
     parser.add_argument(
         "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
     )
+    # Training configuration
+    parser.add_argument("--train_vision_encoder", action="store_true", help="Train VisionEncoder.")
+
+    # 
     parser.add_argument("--use_ema", action="store_true", help="Whether to use EMA model.")
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
@@ -413,14 +417,14 @@ def main():
             os.makedirs(args.output_dir, exist_ok=True)
 
     # Load models and create wrapper for stable diffusion
-    tokenizer = CLIPTokenizer.from_pretrained(
-        args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
-    )
-    text_encoder = CLIPTextModel.from_pretrained(
-        args.pretrained_model_name_or_path,
-        subfolder="text_encoder",
-        revision=args.revision,
-    )
+    #tokenizer = CLIPTokenizer.from_pretrained(
+    #    args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision
+    #)
+    #text_encoder = CLIPTextModel.from_pretrained(
+    #    args.pretrained_model_name_or_path,
+    #    subfolder="text_encoder",
+    #    revision=args.revision,
+    #)
     vision_encoder = CLIPVisionModel.from_pretrained(
         "openai/clip-vit-large-patch14",
     )
@@ -448,8 +452,8 @@ def main():
 
     # Freeze vae and text_encoder
     vae.requires_grad_(False)
-    text_encoder.requires_grad_(False)
-    vision_encoder.requires_grad_(False)
+    if not args.train_vision_encoder:
+        vision_encoder.requires_grad_(False)
 
     #if args.gradient_checkpointing:
     #    unet.enable_gradient_checkpointing()
@@ -639,7 +643,7 @@ def main():
     # Move text_encode and vae to gpu.
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
-    text_encoder.to(accelerator.device, dtype=weight_dtype)
+    #text_encoder.to(accelerator.device, dtype=weight_dtype)
     vision_encoder.to(accelerator.device, dtype=weight_dtype)
     converter.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
@@ -709,7 +713,8 @@ def main():
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         converter.train()
-        #vision_encoder.train() # TODO: argの中で切り替えられるように
+        if args.train_vision_encoder:
+            vision_encoder.train() # TODO: argの中で切り替えられるように
 
         progress_bar = tqdm(total=num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
         progress_bar.set_description(f"Epoch {epoch}")
@@ -795,6 +800,7 @@ def main():
             if args.use_ema:
                 ema_unet.copy_to(unet.parameters())
 
+            progress_bar.set_postfix({"status":"saving"})
             pipeline.save_pretrained(args.output_dir)
             #vae.save_pretrained(args.output_dir+"/vae")
             #unet.save_pretrained(args.output_dir+"/unet")
