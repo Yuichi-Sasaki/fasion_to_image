@@ -43,8 +43,7 @@ def parse_args():
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
-        default=None,
-        required=True,
+        default="CompVis/stable-diffusion-v1-4",
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
@@ -53,7 +52,7 @@ def parse_args():
         default="eval",
         help="Path to hiraoki images dir",
     )
-    parser.add_argument("--eval_images_num", type=int, default=2, help="How many images to be generated for each hiraoki image")
+    parser.add_argument("--eval_images_num", type=int, default=5, help="How many images to be generated for each hiraoki image")
     parser.add_argument(
         "--revision",
         type=str,
@@ -77,7 +76,7 @@ def parse_args():
         default=None,
         help="The config of the Dataset, leave as None if there's only one config.",
     )
-    parser.add_argument("--save_images_epochs", type=int, default=10, help="How often to save images during training.")
+    parser.add_argument("--save_images_epochs", type=int, default=1, help="How often to save images during training.")
     parser.add_argument(
         "--train_data_dir",
         type=str,
