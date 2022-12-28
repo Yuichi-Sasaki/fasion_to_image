@@ -500,7 +500,7 @@ def main():
     else:
         data_files = {}
         if args.train_data_dir is not None:
-            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:2]
+            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)
             imgs_hiraoki = [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui]
             #print(len(imgs_chakui))
             dataset = Dataset.from_dict({"pixel_values":imgs_chakui, "ref_pixel_values":imgs_hiraoki}, split="train")
@@ -813,6 +813,10 @@ def main():
         # Generate sample images for visual inspection
         if accelerator.is_main_process:
             if epoch % args.save_images_epochs == 0 or epoch == args.num_train_epochs - 1:
+                unet.train(False)
+                converter.train(False)
+                vision_encoder.train(False)
+
                 images = []
                 eval_samples = sorted(glob.glob(args.eval_images_dir+"/*.jpg"))
                 for f in eval_samples:
