@@ -41,7 +41,7 @@ args = parse_args()
 
 generator = torch.Generator(device="cuda").manual_seed(args.seed)
 
-if True:
+if False:
     converter = ConverterModel.from_pretrained(
         args.model_path,
         config=ConverterConfig(),
@@ -67,8 +67,15 @@ if True:
         unet=unet,
     )
 else:
+    # Converterだけ、継承元のクラスが違うらしくて自動で読めないので、外から与える
+    converter = ConverterModel.from_pretrained(
+        args.model_path,
+        config=ConverterConfig(),
+        subfolder="converter",
+    )
     pipe = StableDiffusionPipelineVision.from_pretrained(
         args.model_path,
+        converter=converter,
     )
 
 pipe.to("cuda")

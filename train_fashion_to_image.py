@@ -455,7 +455,7 @@ def main():
     else:
         data_files = {}
         if args.train_data_dir is not None:
-            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:100]
+            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:1000]
             imgs_hiraoki = [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui]
             #print(len(imgs_chakui))
             dataset = Dataset.from_dict({"pixel_values":imgs_chakui, "ref_pixel_values":imgs_hiraoki}, split="train")

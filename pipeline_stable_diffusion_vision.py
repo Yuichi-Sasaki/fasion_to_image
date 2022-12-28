@@ -203,7 +203,7 @@ class StableDiffusionPipelineVision(DiffusionPipeline):
 
         device = torch.device(f"cuda:{gpu_id}")
 
-        for cpu_offloaded_model in [self.unet, self.vision_encoder, self.vae]:
+        for cpu_offloaded_model in [self.unet, self.vision_encoder, self.vae, self.converter]:
             if cpu_offloaded_model is not None:
                 cpu_offload(cpu_offloaded_model, device)
 
