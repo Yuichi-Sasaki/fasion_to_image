@@ -6,6 +6,7 @@ import random
 import glob
 from pathlib import Path
 from typing import Iterable, Optional
+import PIL
 
 import numpy as np
 import torch
@@ -47,6 +48,13 @@ def parse_args():
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
     parser.add_argument(
+        "--eval_images_dir",
+        type=str,
+        default="eval",
+        help="Path to hiraoki images dir",
+    )
+    parser.add_argument("--eval_images_num", type=int, default=2, help="How many images to be generated for each hiraoki image")
+    parser.add_argument(
         "--revision",
         type=str,
         default=None,
@@ -69,6 +77,7 @@ def parse_args():
         default=None,
         help="The config of the Dataset, leave as None if there's only one config.",
     )
+    parser.add_argument("--save_images_epochs", type=int, default=10, help="How often to save images during training.")
     parser.add_argument(
         "--train_data_dir",
         type=str,
@@ -253,6 +262,38 @@ def parse_args():
 
     return args
 
+def make_grid(x, nrow, ncol, padding=0):
+    """Numpy配列の複数枚の画像を、1枚の画像にタイルします
+
+    Arguments:
+        imgs {np.ndarray} -- 複数枚の画像からなるテンソル
+        nrow {int} -- 1行あたりにタイルする枚数
+
+    Keyword Arguments:
+        padding {int} -- グリッドの間隔 (default: {0})
+
+    Returns:
+        [np.ndarray] -- 3階テンソル。1枚の画像
+    """
+    #assert imgs.ndim == 4 and nrow > 0
+    batch, height, width, ch = x.shape
+    #n = nrow * (batch // nrow + np.sign(batch % nrow))
+    #ncol = n // nrow
+    #pad = np.zeros((n - batch, height, width, ch), imgs.dtype)
+    #x = np.concatenate([imgs, pad], axis=0)
+    #x = imgs
+    # border padding if required
+    #if padding > 0:
+        #x = np.pad(x, ((0, 0), (0, padding), (0, padding), (0, 0)),
+        #           "constant", constant_values=(0, 0)) # 下と右だけにpaddingを入れる
+        #height += padding
+        #width += padding
+    x = x.reshape(ncol, nrow, height, width, ch)
+    x = x.transpose([0, 2, 1, 3, 4])  # (ncol, height, nrow, width, ch)
+    x = x.reshape(height * ncol, width * nrow, ch)
+    #if padding > 0:
+    #    x = x[:(height * ncol - padding),:(width * nrow - padding),:] # 右端と下端のpaddingを削除
+    return x
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
     if token is None:
@@ -455,7 +496,7 @@ def main():
     else:
         data_files = {}
         if args.train_data_dir is not None:
-            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:1000]
+            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)[:2]
             imgs_hiraoki = [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui]
             #print(len(imgs_chakui))
             dataset = Dataset.from_dict({"pixel_values":imgs_chakui, "ref_pixel_values":imgs_hiraoki}, split="train")
@@ -654,9 +695,6 @@ def main():
         first_epoch = resume_global_step // num_update_steps_per_epoch
         resume_step = resume_global_step % num_update_steps_per_epoch
 
-    # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
-    progress_bar.set_description("Steps")
 
     pipeline = StableDiffusionPipelineVision.from_pretrained(
         args.pretrained_model_name_or_path,
@@ -666,11 +704,15 @@ def main():
         unet=unet,
         revision=args.revision,
     )
+    pipeline.to(accelerator.device)
 
     for epoch in range(first_epoch, args.num_train_epochs):
         unet.train()
         converter.train()
-        #vision_encoder.train()
+        #vision_encoder.train() # TODO: argの中で切り替えられるように
+
+        progress_bar = tqdm(total=num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
+        progress_bar.set_description(f"Epoch {epoch}")
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
             # Skip steps until we reach the resumed step
@@ -745,6 +787,7 @@ def main():
             if global_step >= args.max_train_steps:
                 break
 
+        progress_bar.close()
         # Create the pipeline using the trained modules and save it.
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
@@ -752,15 +795,6 @@ def main():
             if args.use_ema:
                 ema_unet.copy_to(unet.parameters())
 
-            #pipeline = StableDiffusionPipelineVision.from_pretrained(
-            #    args.pretrained_model_name_or_path,
-            #    vision_encoder=vision_encoder,
-            #    converter=converter,
-            #    vae=vae,
-            #    unet=unet,
-            #    revision=args.revision,
-            #)
-            print("files saved.")
             pipeline.save_pretrained(args.output_dir)
             #vae.save_pretrained(args.output_dir+"/vae")
             #unet.save_pretrained(args.output_dir+"/unet")
@@ -769,6 +803,28 @@ def main():
 
         if args.push_to_hub:
             repo.push_to_hub(commit_message="End of training", blocking=False, auto_lfs_prune=True)
+
+        # Generate sample images for visual inspection
+        if accelerator.is_main_process:
+            if epoch % args.save_images_epochs == 0 or epoch == args.num_train_epochs - 1:
+                images = []
+                eval_samples = sorted(glob.glob(args.eval_images_dir+"/*.jpg"))
+                for f in eval_samples:
+                    images.append(np.array(PIL.Image.open(f).resize((args.resolution,args.resolution))))
+                    generator = torch.Generator(device=pipeline.device).manual_seed(0)
+                    for _ in range(args.eval_images_num):
+                        image = pipeline(inimg=f, generator=generator, height=args.resolution, width=args.resolution).images[0]
+                        image = np.array(image)
+                        images.append(image)
+                images = np.array(images)
+                images = make_grid(images, nrow=args.eval_images_num+1, ncol=len(eval_samples))
+
+                # denormalize the images and save to tensorboard
+                accelerator.get_tracker("tensorboard").add_image(
+                    "eval_samples", images, epoch, dataformats="HWC"
+                )
+
+        accelerator.wait_for_everyone()
 
     accelerator.end_training()
 
