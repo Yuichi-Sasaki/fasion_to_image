@@ -4,6 +4,8 @@ Diffusersを使って、平置き画像を着衣画像に変換
 # Setup
 
 ```
+conda create -n fashion_diffusion python=3.8
+conda activate fashion_diffusion
 pip install -r requirements.txt
 ```
 
@@ -11,19 +13,19 @@ pip install -r requirements.txt
 
 ```
 python train_fashion_to_image.py \
-       --pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4" \
-       --use_ema \
-       --resolution=224 \
-       --center_crop \
-       --train_batch_size=64 \
-       --gradient_accumulation_steps=1  \
-       --num_train_epochs=1000  \
-       --learning_rate=1e-05  \
-       --max_grad_norm=1 \
-       --lr_scheduler="constant" \
-       --lr_warmup_steps=0  \
-       --output_dir="output" \
-       --train_data_dir=/shared/datasets/datasets/fashion/FashionTryOn/v2.0
+--train_data_dir=/shared/datasets/datasets/fashion/FashionTryOn/v2.0 \
+--use_ema \
+--center_crop \
+--num_train_epochs=10000  \
+--max_grad_norm=1 \
+--lr_scheduler="constant" \
+--resolution=224 \
+--lr_warmup_steps=0  \
+--learning_rate=1e-05  \
+--gradient_accumulation_steps=1  \
+--train_batch_size=48 \
+--train_vision_encoder \
+--output_dir="output"
 ```
 
 # Eval
