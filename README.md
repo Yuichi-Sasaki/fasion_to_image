@@ -28,6 +28,10 @@ python train_fashion_to_image.py \
 --output_dir="output"
 ```
 
+```
+tensorboard --logdir output --host=0.0.0.0
+```
+
 # Eval
 
 ```
