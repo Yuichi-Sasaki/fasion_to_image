@@ -198,6 +198,8 @@ def parse_args():
     )
     # Training configuration
     parser.add_argument("--train_vision_encoder", action="store_true", help="Train VisionEncoder.")
+    parser.add_argument("--train_converter", action="store_true", help="Train Converter.")
+    parser.add_argument("--train_unet", action="store_true", help="Train UNet.")
 
     # 
     parser.add_argument("--use_ema", action="store_true", help="Whether to use EMA model.")
@@ -460,9 +462,25 @@ def main():
             )
 
     # Freeze vae and text_encoder
+    train_params = []
     vae.requires_grad_(False)
-    if not args.train_vision_encoder:
+    if args.train_vision_encoder:
+        vision_encoder.requires_grad_(True)
+        train_params += vision_encoder.parameters()
+    else:
         vision_encoder.requires_grad_(False)
+
+    if args.train_converter:
+        converter.requires_grad_(True)
+        train_params += converter.parameters()
+    else:
+        converter.requires_grad_(False)
+
+    if args.train_unet:
+        unet.requires_grad_(True)
+        train_params += unet.parameters()
+    else:
+        unet.requires_grad_(False)
 
     #if args.gradient_checkpointing:
     #    unet.enable_gradient_checkpointing()
@@ -486,7 +504,8 @@ def main():
         optimizer_cls = torch.optim.AdamW
 
     optimizer = optimizer_cls(
-        unet.parameters(),
+        #unet.parameters(),
+        train_params,
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
@@ -751,10 +770,12 @@ def main():
     pipeline.to(accelerator.device)
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        unet.train()
-        converter.train()
+        if args.train_unet:
+            unet.train()
+        if args.train_converter:
+            converter.train()
         if args.train_vision_encoder:
-            vision_encoder.train() # TODO: argの中で切り替えられるように
+            vision_encoder.train()
 
         progress_bar = tqdm(total=num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
         progress_bar.set_description(f"Epoch {epoch}")
