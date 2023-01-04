@@ -198,8 +198,10 @@ def parse_args():
     )
     # Training configuration
     parser.add_argument("--train_vision_encoder", action="store_true", help="Train VisionEncoder.")
+    parser.add_argument("--train_vision_encoder_attnonly", action="store_true", help="Train VisionEncoder, but only attention layers.")
     parser.add_argument("--train_converter", action="store_true", help="Train Converter.")
     parser.add_argument("--train_unet", action="store_true", help="Train UNet.")
+    parser.add_argument("--train_unet_attnonly", action="store_true", help="Train UNet, but only attention layers.")
 
     # 
     parser.add_argument("--use_ema", action="store_true", help="Whether to use EMA model.")
@@ -467,6 +469,11 @@ def main():
     if args.train_vision_encoder:
         vision_encoder.requires_grad_(True)
         train_params += vision_encoder.parameters()
+    elif args.train_vision_encoder_attnonly:
+        vision_encoder.requires_grad_(True)
+        for name, param in vision_encoder.named_parameters():
+            if "self_attn" in name:
+                train_params.append(param)
     else:
         vision_encoder.requires_grad_(False)
 
@@ -479,8 +486,16 @@ def main():
     if args.train_unet:
         unet.requires_grad_(True)
         train_params += unet.parameters()
+    elif args.train_unet_attnonly:
+        unet.requires_grad_(True)
+        for name, param in unet.named_parameters():
+            if "attention" in name:
+                train_params.append(param)
     else:
         unet.requires_grad_(False)
+
+    print("trainable params: {}".format(len(train_params)))
+    #print(unet.named_parameters())
 
     #if args.gradient_checkpointing:
     #    unet.enable_gradient_checkpointing()
@@ -531,7 +546,7 @@ def main():
             imgs_chakui, imgs_hiraoki = [], []
             for data_dir in args.train_data_dir:
                 print(data_dir)
-                imgs_chakui_tmp = glob.glob(os.path.join(data_dir, "*_chakui.jpg"), recursive=True)[:10]
+                imgs_chakui_tmp = glob.glob(os.path.join(data_dir, "*_chakui.jpg"), recursive=True)
                 imgs_hiraoki += [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui_tmp]
                 imgs_chakui += imgs_chakui_tmp
                 #print(len(imgs_chakui))
@@ -772,11 +787,11 @@ def main():
     pipeline.to(accelerator.device)
 
     for epoch in range(first_epoch, args.num_train_epochs):
-        if args.train_unet:
+        if args.train_unet or args.train_unet_attnonly:
             unet.train()
         if args.train_converter:
             converter.train()
-        if args.train_vision_encoder:
+        if args.train_vision_encoder or args.train_vision_encoder_attnonly:
             vision_encoder.train()
 
         progress_bar = tqdm(total=num_update_steps_per_epoch, disable=not accelerator.is_local_main_process)
