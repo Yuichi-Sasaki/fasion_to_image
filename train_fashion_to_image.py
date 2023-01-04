@@ -531,7 +531,7 @@ def main():
             imgs_chakui, imgs_hiraoki = [], []
             for data_dir in args.train_data_dir:
                 print(data_dir)
-                imgs_chakui_tmp = glob.glob(os.path.join(data_dir, "*_chakui.jpg"), recursive=True)
+                imgs_chakui_tmp = glob.glob(os.path.join(data_dir, "*_chakui.jpg"), recursive=True)[:10]
                 imgs_hiraoki += [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui_tmp]
                 imgs_chakui += imgs_chakui_tmp
                 #print(len(imgs_chakui))
@@ -714,7 +714,8 @@ def main():
 
     # Create EMA for the unet.
     if args.use_ema:
-        ema_unet = EMAModel(unet.parameters())
+        #ema_unet = EMAModel(unet.parameters())
+        ema = EMAModel(train_params)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -836,7 +837,7 @@ def main():
             # Checks if the accelerator has performed an optimization step behind the scenes
             if accelerator.sync_gradients:
                 if args.use_ema:
-                    ema_unet.step(unet.parameters())
+                    ema.step(train_params)
                 progress_bar.update(1)
                 global_step += 1
                 accelerator.log({"train_loss": train_loss}, step=global_step)
@@ -858,9 +859,9 @@ def main():
         # Create the pipeline using the trained modules and save it.
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
-            unet = accelerator.unwrap_model(unet)
+            #unet = accelerator.unwrap_model(unet)
             if args.use_ema:
-                ema_unet.copy_to(unet.parameters())
+                ema.copy_to(train_params)
 
             progress_bar.set_postfix({"status":"saving"})
             pipeline.save_pretrained(args.output_dir)
