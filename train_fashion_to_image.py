@@ -81,6 +81,7 @@ def parse_args():
         "--train_data_dir",
         type=str,
         default=None,
+        nargs="+",
         help=(
             "A folder containing the training data. Folder contents must follow the structure described in"
             " https://huggingface.co/docs/datasets/image_dataset#imagefolder. In particular, a `metadata.jsonl` file"
@@ -498,13 +499,18 @@ def main():
         )
     else:
         data_files = {}
-        if args.train_data_dir is not None:
-            imgs_chakui = glob.glob(os.path.join(args.train_data_dir, "*_chakui.jpg"), recursive=True)
-            imgs_hiraoki = [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui]
-            #print(len(imgs_chakui))
+        if args.train_data_dir:
+            imgs_chakui, imgs_hiraoki = [], []
+            for data_dir in args.train_data_dir:
+                print(data_dir)
+                imgs_chakui_tmp = glob.glob(os.path.join(data_dir, "*_chakui.jpg"), recursive=True)
+                imgs_hiraoki += [x.replace("_chakui.jpg","_hiraoki.jpg") for x in imgs_chakui_tmp]
+                imgs_chakui += imgs_chakui_tmp
+                #print(len(imgs_chakui))
             dataset = Dataset.from_dict({"pixel_values":imgs_chakui, "ref_pixel_values":imgs_hiraoki}, split="train")
             dataset = dataset.cast_column("pixel_values", Image())
             dataset = dataset.cast_column("ref_pixel_values", Image())
+        print(dataset)
             #print(dataset)
             #print(dataset[0])
             #data_files["train"] = os.path.join(args.train_data_dir, "**_chakui.jpg")
@@ -666,6 +672,7 @@ def main():
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
+        args.train_data_dir = ",".join(args.train_data_dir)
         accelerator.init_trackers("text2image-fine-tune", config=vars(args))
 
     # Train!
