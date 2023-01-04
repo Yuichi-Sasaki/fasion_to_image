@@ -625,13 +625,14 @@ def main():
         ]
     )
     # CLIPの実装を参照 (https://huggingface.co/openai/clip-vit-large-patch14/blob/main/preprocessor_config.json)
+    clip_input_resolution = 224
     train_transforms_ref = transforms.Compose(
             aug_hiraoki +
         [
             #transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
             #transforms.Resize((args.resolution,args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.Resize((args.resolution, args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution),
+            transforms.Resize((clip_input_resolution, clip_input_resolution), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(clip_input_resolution),
             transforms.ToTensor(),
             transforms.Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
         ]
