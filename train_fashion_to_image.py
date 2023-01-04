@@ -130,15 +130,24 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--center_crop",
+        "--random_aug_chakui",
         action="store_true",
-        help="Whether to center crop images before resizing to resolution (if not set, random crop will be used)",
+        help="whether to randomly apply affine and color jitter augmentation to whole-body Chakui images.",
     )
     parser.add_argument(
-        "--random_flip",
+        "--random_aug_hiraoki",
         action="store_true",
-        help="whether to randomly flip images horizontally",
+        help="whether to randomly apply affine and color jitter augmentation to Hiraoki reference images.",
     )
+    #parser.add_argument( "--center_crop",
+    #    action="store_true",
+    #    help="Whether to center crop images before resizing to resolution (if not set, random crop will be used)",
+    #)
+    #parser.add_argument(
+    #    "--random_flip",
+    #    action="store_true",
+    #    help="whether to randomly flip images horizontally",
+    #)
     parser.add_argument(
         "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
     )
@@ -565,10 +574,32 @@ def main():
         input_ids = inputs.input_ids
         return input_ids
 
+    aug_chakui = []
+    if args.random_aug_chakui:
+        aug_chakui.append(transforms.RandomAffine(degrees=[-10, 10],
+                                translate=(0.1,0.1),
+                                scale=[0.8, 1.2],
+                                fill=255,
+                                interpolation=transforms.InterpolationMode.BILINEAR))
+        aug_chakui.append(transforms.ColorJitter(brightness=0.2,
+                                contrast=0.2,
+                                saturation=0.1))
+    aug_hiraoki = []
+    if args.random_aug_hiraoki:
+        aug_hiraoki.append(transforms.RandomAffine(degrees=[-10, 10],
+                                translate=(0.1,0.1),
+                                scale=[0.8, 1.2],
+                                fill=255,
+                                interpolation=transforms.InterpolationMode.BILINEAR))
+        aug_hiraoki.append(transforms.ColorJitter(brightness=0.2,
+                                contrast=0.2,
+                                saturation=0.1))
+
     train_transforms = transforms.Compose(
+            aug_chakui + 
         [
             transforms.Resize((args.resolution, args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
+            transforms.CenterCrop(args.resolution),
             #transforms.RandomHorizontalFlip() if args.random_flip else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5]),
@@ -576,9 +607,12 @@ def main():
     )
     # CLIPの実装を参照 (https://huggingface.co/openai/clip-vit-large-patch14/blob/main/preprocessor_config.json)
     train_transforms_ref = transforms.Compose(
+            aug_hiraoki +
         [
-            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
-            transforms.Resize((args.resolution,args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
+            #transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
+            #transforms.Resize((args.resolution,args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.Resize((args.resolution, args.resolution), interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(args.resolution),
             transforms.ToTensor(),
             transforms.Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
         ]
